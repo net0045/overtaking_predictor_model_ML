@@ -1,5 +1,6 @@
 import os
 from logic.data_creator import DataCreator
+from logic.model_trainer import ModelTrainer
 
 def test_model():
     pass
@@ -7,8 +8,10 @@ def test_model():
 def validate_model():
     pass
 
-def model_training():
-    pass
+def model_training(name):
+    model_trainer = ModelTrainer(name)
+    model_trainer.train_model()
+
 
 def generate_data():
     os.makedirs("data/features", exist_ok=True)
@@ -40,13 +43,15 @@ def main():
     print("V - validate model")
     print("T - test model")
 
-    operation = input("Enter which operation you want to do (G / MT / V / T)!")
+    operation = input("Enter which operation you want to do (G / MT / V / T)! ")
 
     if operation == "G":
         print("Starting generating the dataset values...")
         generate_data()
     elif operation == "MT":
         print("Starting Model training...")
+        model_name = input("Name your model: ")
+        model_training(model_name)
     elif operation == "V":
         print("Starting Model validation...")
     elif operation == "T":
