@@ -23,7 +23,6 @@ class ModelTrainer():
             plt.title(f'Validation Correlation Matrix Model: {self.name}')
             plt.savefig(file_path)
         
-        plt.show()
 
     def show_confusion_matrix(self, matrix):
         file_path = os.path.join(self.path, f"confusion_{self.name}.png")
@@ -39,20 +38,21 @@ class ModelTrainer():
         plt.show()
 
     
-    def train_model(self):
+    def train_model(self, threshold=0.9):
         os.makedirs(self.path, exist_ok=True)
         # Load the data
-        df = pd.read_csv("./data/features/train.csv")
-        df_valid = pd.read_csv("./data/features/valid.csv")
+        df = pd.read_csv("./data/features/train3k_relV.csv")
+        df_valid = pd.read_csv("./data/features/valid3k_relV.csv")
 
         if df is None or df_valid is None:
             raise ValueError("Some of the dataset is not loaded")
 
         # Split the data 
-        X_train = df.drop('target', axis=1)
+        feats_to_drop = ['target']
+        X_train = df.drop(feats_to_drop, axis=1)
         y_train = df['target']
 
-        X_valid = df_valid.drop('target', axis=1)
+        X_valid = df_valid.drop(feats_to_drop, axis=1)
         y_valid = df_valid['target']
 
         # Show correlation matrices
@@ -64,7 +64,8 @@ class ModelTrainer():
         classifier.fit(X_train, y_train)
 
         # Evaluates on validation data
-        y_pred = classifier.predict(X_valid)
+        y_probs = classifier.predict_proba(X_valid)[:, 1]
+        y_pred = (y_probs > threshold).astype(int)
         accuracy = accuracy_score(y_valid, y_pred)
         conf_matrix = confusion_matrix(y_valid, y_pred)
 
@@ -81,7 +82,7 @@ class ModelTrainer():
 
         importances.to_csv(os.path.join(self.path, "importances.csv"), index=False)
 
-        joblib.dump(classifier, f'data/models/{self.name}.pkl')
+        joblib.dump(classifier, f'{self.path}/{self.name}.pkl')
         print("\nModel stored to data/models/..")
 
 
