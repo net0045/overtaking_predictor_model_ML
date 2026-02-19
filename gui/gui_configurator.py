@@ -33,7 +33,7 @@ class GUIConfigurator(ctk.CTk):
         self.main_container = ctk.CTkFrame(self, fg_color="transparent")
         self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.left_panel = ctk.CTkFrame(self.main_container, width=600)
+        self.left_panel = ctk.CTkScrollableFrame(self.main_container, width=600)
         self.left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10))
         
         self.left_panel_label = ctk.CTkLabel(self.left_panel, text="Select an operation to see options", text_color="gray")
@@ -74,19 +74,19 @@ class GUIConfigurator(ctk.CTk):
         name_container = ctk.CTkFrame(row1, fg_color="transparent")
         name_container.pack(side="left", expand=True, fill="x")
         ctk.CTkLabel(name_container, text="Model Name").pack(side="top", anchor="w", padx=5)
-        self.model_rf_name = ctk.CTkEntry(name_container, placeholder_text="Give your model a name", width=250)
+        self.model_rf_name = ctk.CTkEntry(name_container, placeholder_text="Give your model a name", width=200)
         self.model_rf_name.pack(side="top", fill="x", padx=5)
 
         conf_container = ctk.CTkFrame(row1, fg_color="transparent")
         conf_container.pack(side="left", expand=True, fill="x")
         ctk.CTkLabel(conf_container, text="Confidence Threshold (%)").pack(side="top", anchor="w", padx=5)
-        self.confidence_threshold_rf = ctk.CTkEntry(conf_container, placeholder_text="e.g. 80", width=50)
+        self.confidence_threshold_rf = ctk.CTkEntry(conf_container, placeholder_text="e.g. 80", width=25)
         self.confidence_threshold_rf.pack(side="top", fill="x", padx=5)
         
         estim_container = ctk.CTkFrame(row1, fg_color="transparent")
         estim_container.pack(side="left", expand=True, fill="x")
         ctk.CTkLabel(estim_container, text="Number of Estimators").pack(side="top", anchor="w", padx=5)
-        self.n_estimators = ctk.CTkEntry(estim_container, placeholder_text="e.g. 100 (max 1000)", width=50)
+        self.n_estimators = ctk.CTkEntry(estim_container, placeholder_text="e.g. 100 (max 1000)", width=25)
         self.n_estimators.pack(side="top", fill="x", padx=5)
 
         # CSV paths choosing
@@ -154,14 +154,26 @@ class GUIConfigurator(ctk.CTk):
         name_container = ctk.CTkFrame(row1, fg_color="transparent")
         name_container.pack(side="left", expand=True, fill="x")
         ctk.CTkLabel(name_container, text="Model Name").pack(side="top", anchor="w", padx=5)
-        self.model_nn_name = ctk.CTkEntry(name_container, placeholder_text="Give your model a name", width=250)
+        self.model_nn_name = ctk.CTkEntry(name_container, placeholder_text="Give your model a name", width=200)
         self.model_nn_name.pack(side="top", fill="x", padx=5)
 
         conf_container = ctk.CTkFrame(row1, fg_color="transparent")
         conf_container.pack(side="left", expand=True, fill="x")
         ctk.CTkLabel(conf_container, text="Confidence Threshold (%)").pack(side="top", anchor="w", padx=5)
-        self.confidence_threshold_nn = ctk.CTkEntry(conf_container, placeholder_text="e.g. 80", width=250)
+        self.confidence_threshold_nn = ctk.CTkEntry(conf_container, placeholder_text="e.g. 80", width=25)
         self.confidence_threshold_nn.pack(side="top", fill="x", padx=5)
+
+        epoch_container = ctk.CTkFrame(row1, fg_color="transparent")
+        epoch_container.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(epoch_container, text="Number of Epochs").pack(side="top", anchor="w", padx=5)
+        self.epoch_nn = ctk.CTkEntry(epoch_container, placeholder_text="e.g. 100 (max 500)", width=25)
+        self.epoch_nn.pack(side="top", fill="x", padx=5)
+
+        batch_container = ctk.CTkFrame(row1, fg_color="transparent")
+        batch_container.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(batch_container, text="Batch Size").pack(side="top", anchor="w", padx=5)
+        self.batch_size_nn = ctk.CTkEntry(batch_container, placeholder_text="e.g. 32", width=25)
+        self.batch_size_nn.pack(side="top", fill="x", padx=5)
 
         # CSV paths choosing
         row2 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
@@ -185,12 +197,214 @@ class GUIConfigurator(ctk.CTk):
         self.btn_browse_validation = ctk.CTkButton(row3, text="Browse Validation Data", command=lambda: self.browse_file(True, True), fg_color="#34495e")
         self.btn_browse_validation.pack(side="left", expand=True, padx=5)
 
+        row4 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row4.pack(fill="x", padx=10, pady=5)
+
+        self.nn_vizualizer_container = ctk.CTkFrame(row4, fg_color="transparent")
+        self.nn_vizualizer_container.pack(fill="x")
+
+        self.nn_seg_btn = ctk.CTkSegmentedButton(
+            self.left_panel, 
+            values=["Prebuild NN Architecture", "Custom NN Architecture"],
+            command=lambda v: self.handle_chosen_nn_architecture(v, self.nn_vizualizer_container) 
+        )
+        self.nn_seg_btn.pack(pady=10)
+        self.nn_seg_btn.set("Prebuild NN Architecture")
+
+        self.handle_chosen_nn_architecture("Prebuild NN Architecture", self.nn_vizualizer_container)
+
         self.buttonStart = ctk.CTkButton(self.left_panel, text="Start Training", width=200, height=40, 
                                           command=self.start_nn_training, fg_color="green", hover_color="#27ae60")
         self.buttonStart.pack(pady=30)
+    
+    def handle_chosen_nn_architecture(self, value, container):
+        for widget in container.winfo_children():
+            widget.destroy()
+        if value == "Prebuild NN Architecture":
+            ctk.CTkLabel(container, text="Using optimized ADAS architecture (3 layers: 64, 32, 16)", text_color="gray").pack(pady=10)
+            self.nn_architecture_ui(container, True)
+            #self.model_nn_trainer.use_prebuilt_architecture = True
+        else:
+            self.nn_architecture_ui(container)
+            #self.model_nn_trainer.use_prebuilt_architecture = False
+    
+    def nn_architecture_ui(self, container, prebuilded = False):
+        self.nn_hid_layers_data = [] 
+        self.layers_visualizer_frame = ctk.CTkScrollableFrame(
+            container, 
+            height=200, 
+            orientation="horizontal", 
+            label_text="Sequential Dense Neural Network Architecture",
+            label_font=("Arial", 12, "bold")
+        )
+        self.layers_visualizer_frame.pack(fill="x", padx=5, pady=5)
+        self.add_input_layer()
+
+        if prebuilded:
+            self.add_prebuild_nn_layer(16, "relu", 1)
+            self.add_prebuild_nn_layer(8, "relu", 2)
+            self.add_output_layer("sigmoid", prebuilded=True)
+        else:
+            ctrl_frame = ctk.CTkFrame(container, fg_color="transparent")
+            ctrl_frame.pack(fill="x", pady=(5, 10))
+            
+            ctk.CTkButton(ctrl_frame, text="+ Add Layer", width=120, command=self.add_custom_nn_layer, fg_color="#267cb6", hover_color="#1d5d8a").pack(side="left", padx=5)
+            ctk.CTkButton(ctrl_frame, text="- Remove Layer", width=120, command=self.remove_custom_nn_layer, fg_color="#c02741", hover_color="#921d32").pack(side="left", padx=5)
+            
+            self.add_custom_nn_layer()
+            self.add_output_layer("sigmoid")
+        
+    # Adds a fixed input layer with disabled entry for number of neurons (equal to number of features)
+    def add_input_layer(self):
+        layer_box = ctk.CTkFrame(self.layers_visualizer_frame, width=140, height=180, border_width=2, border_color="#cc2115", corner_radius=20, fg_color="#944E4B")
+        layer_box.pack(side="left", padx=10, pady=5)
+        layer_box.pack_propagate(False)
+        ctk.CTkLabel(layer_box, text="Input Layer", font=("Arial", 11, "bold")).pack(pady=2)
+
+        ctk.CTkLabel(layer_box, text="Neurons:", font=("Arial", 10)).pack()
+        neurons_entry = ctk.CTkEntry(layer_box, width=80)
+        neurons_entry.insert(0, "Features") 
+        neurons_entry.configure(state="disabled")
+        neurons_entry.pack(pady=1)
+
+    # Adds an output layer with 1 neuron and selectable activation function, entries are disabled if prebuilded architecture is chosen
+    def add_output_layer(self, activation, prebuilded = False):
+        layer_box = ctk.CTkFrame(self.layers_visualizer_frame, width=140, height=180, border_width=2, border_color="#2a8d3a", corner_radius=20, fg_color="#2a553f")
+        layer_box.pack(side="left", padx=10, pady=5)
+        layer_box.pack_propagate(False)
+        ctk.CTkLabel(layer_box, text="Output Layer", font=("Arial", 11, "bold")).pack(pady=2)
+
+        ctk.CTkLabel(layer_box, text="Neurons:", font=("Arial", 10)).pack()
+        neurons_entry = ctk.CTkEntry(layer_box, width=80)
+        neurons_entry.insert(0, str(1)) 
+        neurons_entry.configure(state="disabled")
+        neurons_entry.pack(pady=1)
+
+        ctk.CTkLabel(layer_box, text="Activation:", font=("Arial", 10)).pack()
+        activation_combo = ctk.CTkComboBox(layer_box, width=100, values=["relu", "sigmoid", "tanh", "linear"])
+        activation_combo.set(activation)
+        if prebuilded:
+            activation_combo.configure(state="disabled")
+        activation_combo.pack(pady=1)
+
+        self.nn_hid_layers_data.append({
+            "id": "output",
+            "neurons": 1,
+            "activation": activation_combo,
+            "output": True,
+            "frame": layer_box
+        })
+    
+    # Adds a hidden layer with predefined number of neurons and activation function
+    def add_prebuild_nn_layer(self, neurons, activation, index):
+        self.nn_hid_layers_data.append({
+            "id": index,
+            "neurons": neurons,
+            "activation": activation,
+            "output": False
+        })
+
+        layer_box = ctk.CTkFrame(self.layers_visualizer_frame, width=140, height=180, border_width=2, border_color="#122f4d", fg_color="#2a3f55")
+        layer_box.pack(side="left", padx=10, pady=5)
+        layer_box.pack_propagate(False)
+
+        ctk.CTkLabel(layer_box, text=f"Hid. Layer {index}", font=("Arial", 11, "bold")).pack(pady=2)
+
+        ctk.CTkLabel(layer_box, text="Neurons:", font=("Arial", 10)).pack()
+        neurons_entry = ctk.CTkEntry(layer_box, width=80, placeholder_text="e.g. 64")
+        neurons_entry.insert(0, str(neurons)) 
+        neurons_entry.configure(state="disabled")
+        neurons_entry.pack(pady=1)
+
+        ctk.CTkLabel(layer_box, text="Activation:", font=("Arial", 10)).pack()
+        activation_entry = ctk.CTkEntry(layer_box, width=80, placeholder_text="e.g. relu")
+        activation_entry.insert(0, str(activation)) 
+        activation_entry.configure(state="disabled")
+        activation_entry.pack(pady=1)
+    
+    def add_custom_nn_layer(self):
+        if len(self.nn_hid_layers_data) >= 7:
+            self.log_output.insert("end", "Warning: Maximum 6 hidden layers allowed.\n")
+            return
+    
+        output_layer = next((item for item in self.nn_hid_layers_data if item["output"]), None)
+        if output_layer:
+            output_layer["frame"].pack_forget()
+
+        # Main box
+        layer_id = len([l for l in self.nn_hid_layers_data if not l["output"]]) + 1
+        layer_box = ctk.CTkFrame(self.layers_visualizer_frame, width=140, height=180, border_width=2, border_color="#122f4d", fg_color="#2a3f55")
+        layer_box.pack(side="left", padx=10, pady=5)
+        layer_box.pack_propagate(False)
+
+        ctk.CTkLabel(layer_box, text=f"Hid. Layer {layer_id}", font=("Arial", 11, "bold")).pack(pady=2)
+        ctk.CTkLabel(layer_box, text="Neurons:", font=("Arial", 10)).pack()
+        neurons = ctk.CTkEntry(layer_box, width=80)
+        neurons.insert(0, "64") 
+        neurons.pack(pady=1)
+        ctk.CTkLabel(layer_box, text="Activation:", font=("Arial", 10)).pack()
+        activation_combo = ctk.CTkComboBox(layer_box, width=100, values=["relu", "sigmoid", "tanh", "linear"])
+        activation_combo.set("relu")
+        activation_combo.pack(pady=1)
+
+        new_layer_data = {
+            "id": layer_id,
+            "neurons": neurons,
+            "activation": activation_combo,
+            "output": False,
+            "frame": layer_box
+        }
+        
+        if output_layer:
+            self.nn_hid_layers_data.insert(len(self.nn_hid_layers_data)-1, new_layer_data)
+            output_layer["frame"].pack(side="left", padx=10, pady=5)
+        else:
+            self.nn_hid_layers_data.append(new_layer_data)
+
+    
+    def remove_custom_nn_layer(self):
+        hidden_layers = [l for l in self.nn_hid_layers_data if not l["output"]]
+        len_hidden = len(hidden_layers)
+        print(f"Hidden layers before removing: {len_hidden}")
+        
+        if len(hidden_layers) <= 1:
+            self.log_output.insert("end", "Warning: At least one hidden layer is required.\n")
+            return
+
+        last_hidden = hidden_layers[-1]
+        self.nn_hid_layers_data.pop(self.nn_hid_layers_data.index(last_hidden))
+        last_hidden["frame"].destroy()
 
     def start_nn_training(self):
-        pass
+        self.log_output.insert("end", "Starting Neural Network training...\n")
+        model_name = self.model_nn_name.get() if self.model_nn_name.get() else "nn_model"
+        train_path = self.train_data_nn.get()
+        valid_path = self.validation_data_nn.get()
+        conf_thr = self.confidence_threshold_nn.get() if self.confidence_threshold_nn.get() else "70"
+        epochs = self.epoch_nn.get() if self.epoch_nn.get() else "100"
+        batch_size = self.batch_size_nn.get() if self.batch_size_nn.get() else "32"
+        if not epochs.isdigit():
+            self.log_output.insert("end", "ERROR: Please enter a valid number for epochs.\n")
+            return
+        if int(epochs) > 500:
+            self.log_output.insert("end", "ERROR: Please enter a number of epochs less than or equal to 500.\n")
+            return
+        else:
+            epochs = int(epochs)
+        if not batch_size.isdigit():
+            self.log_output.insert("end", "ERROR: Please enter a valid number for batch size.\n")
+            return
+        if not conf_thr.isdigit():
+            self.log_output.insert("end", "ERROR: Please enter a valid number for confidence threshold.\n")
+            return
+        if train_path == "No file selected" or valid_path == "No file selected":
+            self.log_output.insert("end", "ERROR: Please select both training and validation datasets.\n")
+            return
+        
+        sorted_layers = sorted(self.nn_hid_layers_data, key=lambda x: x["id"])
+        self.model_nn_trainer.layers = sorted_layers
+        self.model_nn_trainer.train_nn_model(float(conf_thr)/100, model_name, train_path, valid_path, epochs, batch_size, self.log_output.insert)
+
 
 
 

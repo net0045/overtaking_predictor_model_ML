@@ -13,6 +13,7 @@ class ModelNNTrainer():
     def __init__(self, name = "NN_model"):
         self.name = name
         self.path = f"data/models/{name}"
+        self.layers = None
 
     def scale_data(self, X_train, X_valid):
         scaler = StandardScaler()
@@ -71,16 +72,21 @@ class ModelNNTrainer():
         plt.savefig(f'{self.path}/training_history.png')
         plt.show()
     
-    def train_nn_model_config(self, threshold, name, train_path, valid_path):
+    def train_nn_model(self, threshold, name, train_path, valid_path, epochs, batch_size, log_function):
         self.name = name
         self.path = os.path.join("data/models", name)
-        os.makedirs(self.path, exist_ok=True)
 
+        def log(msg):
+            log_function("end", f">>> [NN training] {msg}\n")
+
+        os.makedirs(self.path, exist_ok=True)
+        log(f"Loading datasets from {train_path} and {valid_path}...")
         df = pd.read_csv(train_path)
         df_valid = pd.read_csv(valid_path)
 
         if df is None or df_valid is None:
-            raise ValueError("Some of the dataset is not loaded")
+            log(f"[ERR] Failed to load datasets!")
+            return
         
         feats_to_drop = ['target']
 
@@ -96,10 +102,10 @@ class ModelNNTrainer():
         self.show_correlation_matrix(df)
         self.show_correlation_matrix(df_valid, True)
 
-        print("Started training Neural Network model...")
-        nn = MyNeuralNetwork()
-        model = nn.build_model(X_train_scaled.shape[1])
-        history = model.fit(
+        log(f"Training model {name} with threshold {threshold}...")
+        #nn = MyNeuralNetwork()
+        model_nn = self.build_nn_architecture(X_train_scaled.shape[1], self.layers, log_function)
+        history = model_nn.fit(
             X_train_scaled, y_train, 
             epochs=50, 
             batch_size=32, 
@@ -107,68 +113,39 @@ class ModelNNTrainer():
             verbose=1
         )
 
-        y_pred = (model.predict(X_valid_scaled) > threshold).astype(int)
+        y_pred = (model_nn.predict(X_valid_scaled) > threshold).astype(int)
         conf_matrix = confusion_matrix(y_valid, y_pred)
        
         self.show_history(history)
         self.show_confusion_matrix(conf_matrix)
 
         model_save_path = os.path.join(self.path, f'{self.name}.keras')
-        model.save(model_save_path)
-        print(f"\nModel and Scaler stored in: {self.path}")
-        
-        return history
-
-
-
-    def train_nn_model(self, threshold=0.9):
-        os.makedirs(self.path, exist_ok=True)
-        # Load the data
-        df = pd.read_csv("./data/features/train3k_relV.csv")
-        df_valid = pd.read_csv("./data/features/valid3k_relV.csv")
-
-        if df is None or df_valid is None:
-            raise ValueError("Some of the dataset is not loaded")
-
-        # Split the data 
-        # feature to drop
-        feats_to_drop = ['target']
-
-        X_train = df.drop(feats_to_drop, axis=1)
-        y_train = df['target']
-
-        X_valid = df_valid.drop(feats_to_drop, axis=1)
-        y_valid = df_valid['target']
-
-        # Scale the data
-        X_train_scaled, X_valid_scaled = self.scale_data(X_train, X_valid)
-
-        self.show_correlation_matrix(df)
-        self.show_correlation_matrix(df_valid, True)
-
-        print("Started training Neural Network model...")
-        nn = MyNeuralNetwork()
-        model = nn.build_model(X_train_scaled.shape[1])
-        history = model.fit(
-            X_train_scaled, y_train, 
-            epochs=50, 
-            batch_size=32, 
-            validation_data=(X_valid_scaled, y_valid),
-            verbose=1
-        )
-
-        y_pred = (model.predict(X_valid_scaled) > threshold).astype(int)
-        conf_matrix = confusion_matrix(y_valid, y_pred)
-       
-        self.show_history(history)
-        self.show_confusion_matrix(conf_matrix)
-
-        model_save_path = os.path.join(self.path, f'{self.name}.keras')
-        model.save(model_save_path)
-        print(f"\nModel and Scaler stored in: {self.path}")
+        model_nn.save(model_save_path)
+        log(f"\nModel and Scaler stored in: {self.path}")
         
         return history
     
+    def build_nn_architecture(self, input_shape, layers, log_function):
+        model = Sequential()
+        index = 1
+        output_layer = [l for l in layers if l["output"]]
+        only_hidden = [l for l in layers if not l["output"]]
+        sorted_hidden = sorted(only_hidden, key=lambda x: x["id"])
+        for layer in sorted_hidden:
+            log_function("end", f"Building layer with {layer['neurons']} neurons")
+            if layer["id"] != index:
+                log_function("end", f"Error: There has been an unordered layer configuration. Please check the layers order and try again.")
+                return None
+            
+            if layer["id"] == 1:
+                model.add(Dense(int(layer['neurons']), activation=layer['activation'], input_shape=(input_shape,)))
+            else:
+                model.add(Dense(int(layer['neurons']), activation=layer['activation']))
+
+        model.add(Dense(1, activation=output_layer[0]['activation']))
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        return model
+
 
 class MyNeuralNetwork():
     def build_model(self, inp_shape):
