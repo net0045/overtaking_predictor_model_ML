@@ -35,7 +35,6 @@ class ModelNNTrainer():
             plt.title(f'Validation Correlation Matrix NN Model: {self.name}')
             plt.savefig(file_path)
         
-        plt.show()
 
     def show_confusion_matrix(self, matrix):
         file_path = os.path.join(self.path, f"confusion_{self.name}.png")
@@ -72,6 +71,56 @@ class ModelNNTrainer():
         plt.savefig(f'{self.path}/training_history.png')
         plt.show()
     
+    def train_nn_model_config(self, threshold, name, train_path, valid_path):
+        self.name = name
+        self.path = os.path.join("data/models", name)
+        os.makedirs(self.path, exist_ok=True)
+
+        df = pd.read_csv(train_path)
+        df_valid = pd.read_csv(valid_path)
+
+        if df is None or df_valid is None:
+            raise ValueError("Some of the dataset is not loaded")
+        
+        feats_to_drop = ['target']
+
+        X_train = df.drop(feats_to_drop, axis=1)
+        y_train = df['target']
+
+        X_valid = df_valid.drop(feats_to_drop, axis=1)
+        y_valid = df_valid['target']
+
+        # Scale the data
+        X_train_scaled, X_valid_scaled = self.scale_data(X_train, X_valid)
+
+        self.show_correlation_matrix(df)
+        self.show_correlation_matrix(df_valid, True)
+
+        print("Started training Neural Network model...")
+        nn = MyNeuralNetwork()
+        model = nn.build_model(X_train_scaled.shape[1])
+        history = model.fit(
+            X_train_scaled, y_train, 
+            epochs=50, 
+            batch_size=32, 
+            validation_data=(X_valid_scaled, y_valid),
+            verbose=1
+        )
+
+        y_pred = (model.predict(X_valid_scaled) > threshold).astype(int)
+        conf_matrix = confusion_matrix(y_valid, y_pred)
+       
+        self.show_history(history)
+        self.show_confusion_matrix(conf_matrix)
+
+        model_save_path = os.path.join(self.path, f'{self.name}.keras')
+        model.save(model_save_path)
+        print(f"\nModel and Scaler stored in: {self.path}")
+        
+        return history
+
+
+
     def train_nn_model(self, threshold=0.9):
         os.makedirs(self.path, exist_ok=True)
         # Load the data

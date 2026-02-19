@@ -1,3 +1,4 @@
+from cv2 import threshold
 import pandas as pd
 import os
 import joblib
@@ -37,15 +38,22 @@ class ModelTrainer():
         plt.savefig(file_path)
         plt.show()
 
-    
-    def train_model(self, threshold=0.9):
+    def train_model(self, threshold, name, train_path, valid_path, log_function, estimators = 100):
+        self.name = name
+        self.path = os.path.join("data/models", name)
+
+        def log(msg):
+            log_function("end", f">>> [RF training] {msg}\n")
+
         os.makedirs(self.path, exist_ok=True)
         # Load the data
-        df = pd.read_csv("./data/features/train3k_relV.csv")
-        df_valid = pd.read_csv("./data/features/valid3k_relV.csv")
+        log(f"Loading datasets from {train_path} and {valid_path}...")
+        df = pd.read_csv(train_path)
+        df_valid = pd.read_csv(valid_path)
 
         if df is None or df_valid is None:
-            raise ValueError("Some of the dataset is not loaded")
+            log(f"[ERR] Failed to load datasets!")
+            return
 
         # Split the data 
         feats_to_drop = ['target']
@@ -59,8 +67,8 @@ class ModelTrainer():
         self.show_correlation_matrix(df)
         self.show_correlation_matrix(df_valid, True)
 
-        print("Started training RandomForest model...")
-        classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+        log(f"Training model {name} with threshold {threshold} and {estimators} estimators...")
+        classifier = RandomForestClassifier(n_estimators=estimators, random_state=42)
         classifier.fit(X_train, y_train)
 
         # Evaluates on validation data
@@ -71,9 +79,8 @@ class ModelTrainer():
 
         self.show_confusion_matrix(conf_matrix)
         
-        print("\n#Result against validation data#")
-        print("Accuracy (%): ", accuracy)
-        print(classification_report(y_valid, y_pred))
+        log(f"# Results against validation data #\n")
+        log(f"Accuracy (%): {accuracy}\n {classification_report(y_valid, y_pred)}")
 
         importances = pd.DataFrame({
             'feature': X_train.columns,
@@ -83,11 +90,4 @@ class ModelTrainer():
         importances.to_csv(os.path.join(self.path, "importances.csv"), index=False)
 
         joblib.dump(classifier, f'{self.path}/{self.name}.pkl')
-        print("\nModel stored to data/models/..")
-
-
-
-
-
-
-
+        log(f"Model stored to data/models/{name}")

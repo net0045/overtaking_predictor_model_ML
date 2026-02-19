@@ -2,13 +2,16 @@ import cv2
 import customtkinter as ctk
 from PIL import Image, ImageTk
 from logic.data_creator import DataCreator
+from logic.model_trainer import ModelTrainer
+from logic.model_nn_trainer import ModelNNTrainer
 import os
+from tkinter import filedialog
 
 class GUIConfigurator(ctk.CTk):
-    def __init__(self, model_trainer, model_nn_trainer):
+    def __init__(self):
         super().__init__()
-        self.model_trainer = model_trainer
-        self.model_nn_trainer = model_nn_trainer
+        self.model_trainer = ModelTrainer()
+        self.model_nn_trainer = ModelNNTrainer()
         self.data_generator = DataCreator()
         self.create_gui()
         
@@ -17,7 +20,6 @@ class GUIConfigurator(ctk.CTk):
         self.geometry("1280x800")
         ctk.set_appearance_mode("dark")
 
-        # Horní část - Nadpis a výběr operace
         header_label = ctk.CTkLabel(self, text="Overtaking Predictor Control Center", font=("Arial", 24, "bold"))
         header_label.pack(pady=20)
 
@@ -55,13 +57,144 @@ class GUIConfigurator(ctk.CTk):
             case "Data generation":
                 self.data_generation_ui() 
             case "Random Forest training":
-                self.log_output.insert("end", "Status: Preparing RF training layout...\n")
-                # Zde můžeš přidat metodu self.rf_training_ui()
+                self.randon_forest_training_ui()
             case "Neural Network training":
-                self.log_output.insert("end", "Status: Preparing NN training layout...\n")
+                self.neural_network_training_ui()
             case "Model testing":
                 self.log_output.insert("end", "Status: Preparing testing environment...\n")
+    
+    """Train a random Forest Model GUI""" 
+    def randon_forest_training_ui(self):
+        ctk.CTkLabel(self.left_panel, text="Random Forest Training Configuration", font=("Arial", 16, "bold")).pack(pady=10)
 
+        # Model name and confidence threshold
+        row1 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row1.pack(fill="x", padx=10, pady=5)
+
+        name_container = ctk.CTkFrame(row1, fg_color="transparent")
+        name_container.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(name_container, text="Model Name").pack(side="top", anchor="w", padx=5)
+        self.model_rf_name = ctk.CTkEntry(name_container, placeholder_text="Give your model a name", width=250)
+        self.model_rf_name.pack(side="top", fill="x", padx=5)
+
+        conf_container = ctk.CTkFrame(row1, fg_color="transparent")
+        conf_container.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(conf_container, text="Confidence Threshold (%)").pack(side="top", anchor="w", padx=5)
+        self.confidence_threshold_rf = ctk.CTkEntry(conf_container, placeholder_text="e.g. 80", width=50)
+        self.confidence_threshold_rf.pack(side="top", fill="x", padx=5)
+        
+        estim_container = ctk.CTkFrame(row1, fg_color="transparent")
+        estim_container.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(estim_container, text="Number of Estimators").pack(side="top", anchor="w", padx=5)
+        self.n_estimators = ctk.CTkEntry(estim_container, placeholder_text="e.g. 100 (max 1000)", width=50)
+        self.n_estimators.pack(side="top", fill="x", padx=5)
+
+        # CSV paths choosing
+        row2 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row2.pack(fill="x", padx=10, pady=(15, 5))
+
+        self.train_data_rf = ctk.StringVar(value="No file selected")
+        train_path_label = ctk.CTkEntry(row2, textvariable=self.train_data_rf, state="disabled", width=300)
+        train_path_label.pack(side="left", expand=True, fill="x", padx=5)
+
+        self.validation_data_rf = ctk.StringVar(value="No file selected")
+        val_path_label = ctk.CTkEntry(row2, textvariable=self.validation_data_rf, state="disabled", width=300)
+        val_path_label.pack(side="left", expand=True, fill="x", padx=5)
+
+
+        # Buttons for browsing CSV files
+        row3 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row3.pack(fill="x", padx=10, pady=5)
+
+        self.btn_browse_train = ctk.CTkButton(row3, text="Browse Train Data", command=lambda: self.browse_file(False, False), fg_color="#34495e")
+        self.btn_browse_train.pack(side="left", expand=True, padx=5)
+
+        self.btn_browse_validation = ctk.CTkButton(row3, text="Browse Validation Data", command=lambda: self.browse_file(True, False), fg_color="#34495e")
+        self.btn_browse_validation.pack(side="left", expand=True, padx=5)
+
+        self.buttonStart = ctk.CTkButton(self.left_panel, text="Start Training", width=200, height=40, 
+                                          command=self.start_rf_training, fg_color="green", hover_color="#27ae60")
+        self.buttonStart.pack(pady=30)
+    
+
+    def start_rf_training(self):
+        self.log_output.insert("end", "Starting Random Forest training...\n")
+        model_name = self.model_rf_name.get() if self.model_rf_name.get() else "rf_model"
+        train_path = self.train_data_rf.get()
+        valid_path = self.validation_data_rf.get()
+        conf_thr = self.confidence_threshold_rf.get() if self.confidence_threshold_rf.get() else "70"
+        estimators = self.n_estimators.get() if self.n_estimators.get() else 100
+        if not conf_thr.isdigit():
+            self.log_output.insert("end", "ERROR: Please enter a valid number for confidence threshold.\n")
+            return
+        if not estimators.isdigit():
+            self.log_output.insert("end", "ERROR: Please enter a valid number for estimators.\n")
+            return
+        if int(estimators) > 1000:
+            self.log_output.insert("end", "ERROR: Please enter a number of estimators less than or equal to 1000.\n")
+            return
+        else:
+            estimators = int(estimators)
+        if train_path == "No file selected" or valid_path == "No file selected":
+            self.log_output.insert("end", "ERROR: Please select both training and validation datasets.\n")
+            return
+        
+        self.model_trainer.train_model(float(conf_thr)/100, model_name, train_path, valid_path, self.log_output.insert, estimators=estimators)
+     
+
+ 
+    """Model NN trainig UI"""
+    def neural_network_training_ui(self):
+        ctk.CTkLabel(self.left_panel, text="Neural Network Training Configuration", font=("Arial", 16, "bold")).pack(pady=10)
+
+        # Model name and confidence threshold
+        row1 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row1.pack(fill="x", padx=10, pady=5)
+
+        name_container = ctk.CTkFrame(row1, fg_color="transparent")
+        name_container.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(name_container, text="Model Name").pack(side="top", anchor="w", padx=5)
+        self.model_nn_name = ctk.CTkEntry(name_container, placeholder_text="Give your model a name", width=250)
+        self.model_nn_name.pack(side="top", fill="x", padx=5)
+
+        conf_container = ctk.CTkFrame(row1, fg_color="transparent")
+        conf_container.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(conf_container, text="Confidence Threshold (%)").pack(side="top", anchor="w", padx=5)
+        self.confidence_threshold_nn = ctk.CTkEntry(conf_container, placeholder_text="e.g. 80", width=250)
+        self.confidence_threshold_nn.pack(side="top", fill="x", padx=5)
+
+        # CSV paths choosing
+        row2 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row2.pack(fill="x", padx=10, pady=(15, 5))
+
+        self.train_data_nn = ctk.StringVar(value="No file selected")
+        train_path_label = ctk.CTkEntry(row2, textvariable=self.train_data_nn, state="disabled", width=300)
+        train_path_label.pack(side="left", expand=True, fill="x", padx=5)
+
+        self.validation_data_nn = ctk.StringVar(value="No file selected")
+        val_path_label = ctk.CTkEntry(row2, textvariable=self.validation_data_nn, state="disabled", width=300)
+        val_path_label.pack(side="left", expand=True, fill="x", padx=5)
+
+        # Buttons for browsing CSV files
+        row3 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row3.pack(fill="x", padx=10, pady=5)
+
+        self.btn_browse_train = ctk.CTkButton(row3, text="Browse Train Data", command=lambda: self.browse_file(False, True), fg_color="#34495e")
+        self.btn_browse_train.pack(side="left", expand=True, padx=5)
+
+        self.btn_browse_validation = ctk.CTkButton(row3, text="Browse Validation Data", command=lambda: self.browse_file(True, True), fg_color="#34495e")
+        self.btn_browse_validation.pack(side="left", expand=True, padx=5)
+
+        self.buttonStart = ctk.CTkButton(self.left_panel, text="Start Training", width=200, height=40, 
+                                          command=self.start_nn_training, fg_color="green", hover_color="#27ae60")
+        self.buttonStart.pack(pady=30)
+
+    def start_nn_training(self):
+        pass
+
+
+
+    """Data Generation UI - enable user to define features and their ranges"""
     def data_generation_ui(self):
         ctk.CTkLabel(self.left_panel, text="Data Generation Configuration", font=("Arial", 16, "bold")).pack(pady=10)
 
@@ -190,3 +323,14 @@ class GUIConfigurator(ctk.CTk):
         self.log_output.insert("end", f"Train size: {len(train_full)}, Val size: {len(valid_full)}, Test size: {len(test_full)}\n")
         self.log_output.see("end")
 
+
+    def browse_file(self, is_valid = False, is_nn=False):
+        path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if path:
+            if is_nn:
+                if is_valid: self.validation_data_nn.set(path)
+                else: self.train_data_nn.set(path)
+            else:
+                if is_valid: self.validation_data_rf.set(path) 
+                else: self.train_data_rf.set(path)
+    

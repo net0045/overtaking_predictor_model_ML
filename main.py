@@ -43,7 +43,7 @@ def generate_data():
 
 
 def main():
-    app = GUIConfigurator(ModelTrainer("rf_model"), ModelNNTrainer("nn_model"))
+    app = GUIConfigurator()
     app.mainloop()
     """print("Possible operations:")
     print("G - generate data")
