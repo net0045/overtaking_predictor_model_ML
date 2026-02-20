@@ -1,9 +1,12 @@
+from os import path
+
 import cv2
 import customtkinter as ctk
 from PIL import Image, ImageTk
 from logic.data_creator import DataCreator
 from logic.model_trainer import ModelTrainer
 from logic.model_nn_trainer import ModelNNTrainer
+from logic.model_tester import ModelTester
 import os
 from tkinter import filedialog
 
@@ -13,6 +16,7 @@ class GUIConfigurator(ctk.CTk):
         self.model_trainer = ModelTrainer()
         self.model_nn_trainer = ModelNNTrainer()
         self.data_generator = DataCreator()
+        self.model_tester = ModelTester()
         self.create_gui()
         
     def create_gui(self):
@@ -61,7 +65,7 @@ class GUIConfigurator(ctk.CTk):
             case "Neural Network training":
                 self.neural_network_training_ui()
             case "Model testing":
-                self.log_output.insert("end", "Status: Preparing testing environment...\n")
+                self.model_testing_ui()
     
     """Train a random Forest Model GUI""" 
     def randon_forest_training_ui(self):
@@ -375,6 +379,11 @@ class GUIConfigurator(ctk.CTk):
         self.nn_hid_layers_data.pop(self.nn_hid_layers_data.index(last_hidden))
         last_hidden["frame"].destroy()
 
+    def logger_wrapper(self, index, text):
+        self.log_output.insert(index, text)
+        self.log_output.see("end") 
+        self.update_idletasks()
+
     def start_nn_training(self):
         self.log_output.insert("end", "Starting Neural Network training...\n")
         model_name = self.model_nn_name.get() if self.model_nn_name.get() else "nn_model"
@@ -401,9 +410,12 @@ class GUIConfigurator(ctk.CTk):
             self.log_output.insert("end", "ERROR: Please select both training and validation datasets.\n")
             return
         
-        sorted_layers = sorted(self.nn_hid_layers_data, key=lambda x: x["id"])
+        sorted_layers = sorted(
+            self.nn_hid_layers_data, 
+            key=lambda x: x["id"] if isinstance(x["id"], int) else float('inf')
+        )
         self.model_nn_trainer.layers = sorted_layers
-        self.model_nn_trainer.train_nn_model(float(conf_thr)/100, model_name, train_path, valid_path, epochs, batch_size, self.log_output.insert)
+        self.model_nn_trainer.train_nn_model(float(conf_thr)/100, model_name, train_path, valid_path, epochs, int(batch_size), self.logger_wrapper)
 
 
 
@@ -537,14 +549,144 @@ class GUIConfigurator(ctk.CTk):
         self.log_output.insert("end", f"Train size: {len(train_full)}, Val size: {len(valid_full)}, Test size: {len(test_full)}\n")
         self.log_output.see("end")
 
+    """Model Testing UI - enable user to choose model type, upload model and test dataset and start the testing process"""
+    def model_testing_ui(self):
+        ctk.CTkLabel(self.left_panel, text="Model Testing Configuration", font=("Arial", 16, "bold")).pack(pady=10)
 
-    def browse_file(self, is_valid = False, is_nn=False):
+        row1 = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        row1.pack(fill="x", padx=10, pady=5)
+
+        name_container = ctk.CTkFrame(row1, fg_color="transparent")
+        name_container.pack(side="left", expand=True, fill="x")
+        
+        ctk.CTkLabel(name_container, text="Model Name").pack(side="top", anchor="w", padx=5)
+        self.picked_model_name = ctk.CTkEntry(name_container, placeholder_text="Name of the model", width=200, state="disabled")
+        self.picked_model_name.pack(side="top", fill="x", padx=5)
+
+        self.seg_button_test = ctk.CTkSegmentedButton(
+            self.left_panel, 
+            values=["RF model", "NN model"],
+            command=self.choose_model_type 
+        )
+        self.seg_button_test.pack(pady=10)
+
+        self.test_controls_container = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        self.test_controls_container.pack(fill="x", expand=True)
+
+        self.test_data = ctk.StringVar(value="No file selected")
+        self.test_model_path_pkl = ctk.StringVar(value="No model/scaler selected")
+        self.test_model_path_keras = ctk.StringVar(value="No model selected")
+
+        self.seg_button_test.set("RF model")
+        self.choose_model_type("RF model")
+
+    def choose_model_type(self, value):
+        for widget in self.test_controls_container.winfo_children():
+            widget.destroy()
+
+        self.test_model_path_pkl.set("No model/scaler selected")
+        self.test_model_path_keras.set("No model selected")
+
+        row_paths = ctk.CTkFrame(self.test_controls_container, fg_color="transparent")
+        row_paths.pack(fill="x", padx=10, pady=5)
+
+        row_btns = ctk.CTkFrame(self.test_controls_container, fg_color="transparent")
+        row_btns.pack(fill="x", padx=10, pady=5)
+
+        path_box_data = ctk.CTkFrame(row_paths, fg_color="transparent")
+        path_box_data.pack(side="left", expand=True, fill="x", padx=2)
+        ctk.CTkLabel(path_box_data, text="Test Dataset (CSV)", font=("Arial", 10)).pack()
+        ctk.CTkEntry(path_box_data, textvariable=self.test_data, state="disabled").pack(fill="x")
+        
+        ctk.CTkButton(row_btns, text="Browse Test Data", 
+                      command=lambda: self.browse_file(False, False, True), 
+                      fg_color="#34495e").pack(side="left", expand=True, padx=5)
+
+        if value == "RF model":
+            path_box_pkl = ctk.CTkFrame(row_paths, fg_color="transparent")
+            path_box_pkl.pack(side="left", expand=True, fill="x", padx=2)
+            ctk.CTkLabel(path_box_pkl, text="RF Model (PKL)", font=("Arial", 10)).pack()
+            ctk.CTkEntry(path_box_pkl, textvariable=self.test_model_path_pkl, state="disabled").pack(fill="x")
+
+            ctk.CTkButton(row_btns, text="Browse PKL Model", 
+                          command=self.browse_file_pkl_model, 
+                          fg_color="#34495e").pack(side="left", expand=True, padx=5)
+
+        else: 
+            path_box_pkl = ctk.CTkFrame(row_paths, fg_color="transparent")
+            path_box_pkl.pack(side="left", expand=True, fill="x", padx=2)
+            ctk.CTkLabel(path_box_pkl, text="Scaler (PKL)", font=("Arial", 10)).pack()
+            ctk.CTkEntry(path_box_pkl, textvariable=self.test_model_path_pkl, state="disabled").pack(fill="x")
+
+            path_box_keras = ctk.CTkFrame(row_paths, fg_color="transparent")
+            path_box_keras.pack(side="left", expand=True, fill="x", padx=2)
+            ctk.CTkLabel(path_box_keras, text="NN Model (Keras)", font=("Arial", 10)).pack()
+            ctk.CTkEntry(path_box_keras, textvariable=self.test_model_path_keras, state="disabled").pack(fill="x")
+
+            ctk.CTkButton(row_btns, text="Browse Scaler", 
+                          command=self.browse_file_pkl_model, 
+                          fg_color="#34495e").pack(side="left", expand=True, padx=5)
+            ctk.CTkButton(row_btns, text="Browse Keras Model", 
+                          command=self.browse_file_keras_model, 
+                          fg_color="#34495e").pack(side="left", expand=True, padx=5)
+
+        ctk.CTkButton(self.test_controls_container, text="Start Testing", width=200, height=40, 
+                      command=self.start_testing, fg_color="green", hover_color="#27ae60").pack(pady=20)
+
+    def start_testing(self):
+        model_type = self.seg_button_test.get()
+        test_data_path = self.test_data.get()
+        pkl_path = self.test_model_path_pkl.get()
+        keras_path = self.test_model_path_keras.get()
+
+        if test_data_path == "No file selected":
+            self.log_output.insert("end", "ERROR: Please select test dataset.\n")
+            return
+
+        if model_type == "RF model":
+            if pkl_path == "No model/scaler selected":
+                self.log_output.insert("end", "ERROR: Please select RF model (.pkl).\n")
+                return
+            self.update_picked_name(pkl_path)
+            self.model_tester.test_model_rf(pkl_path, test_data_path, self.picked_model_name.get(), self.logger_wrapper)
+        
+        else:
+            if pkl_path == "No model/scaler selected" or keras_path == "No model selected":
+                self.log_output.insert("end", "ERROR: NN testing requires both Scaler (.pkl) and Model (.keras).\n")
+                return
+            self.update_picked_name(keras_path)
+            self.model_tester.test_model_nn(keras_path, pkl_path, test_data_path, self.picked_model_name.get(), self.logger_wrapper)
+
+    def update_picked_name(self, path):
+        model_name = os.path.splitext(os.path.basename(path))[0]
+        
+        self.picked_model_name.configure(state="normal")
+        self.picked_model_name.delete(0, "end")
+        self.picked_model_name.insert(0, model_name)
+        self.picked_model_name.configure(state="disabled")
+        
+
+    def browse_file(self, is_valid = False, is_nn=False, is_test=False):
         path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if path:
             if is_nn:
                 if is_valid: self.validation_data_nn.set(path)
                 else: self.train_data_nn.set(path)
-            else:
+            elif is_nn == False and is_test == False:
                 if is_valid: self.validation_data_rf.set(path) 
                 else: self.train_data_rf.set(path)
+            elif is_test:
+                self.test_data.set(path)
+    
+    def browse_file_pkl_model(self):
+        path = filedialog.askopenfilename(filetypes=[("Pickle files", "*.pkl")])
+        if path:
+           self.test_model_path_pkl.set(path)
+
+    def browse_file_keras_model(self):
+        path = filedialog.askopenfilename(filetypes=[("Keras files", "*.keras")])
+        if path:
+           self.test_model_path_keras.set(path)
+    
+
     

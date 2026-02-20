@@ -1,9 +1,12 @@
+from pyexpat import model
+
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import joblib
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
+from tensorflow.keras.callbacks import LambdaCallback, EarlyStopping
 import os
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
@@ -79,6 +82,9 @@ class ModelNNTrainer():
         def log(msg):
             log_function("end", f">>> [NN training] {msg}\n")
 
+        gui_log_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: log(f"Epoch {epoch+1}/{epochs} - loss: {logs['loss']:.4f} - accuracy: {logs['accuracy']:.4f} - val_loss: {logs['val_loss']:.4f} - val_accuracy: {logs['val_accuracy']:.4f}"))
+        early_stop_callback = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+
         os.makedirs(self.path, exist_ok=True)
         log(f"Loading datasets from {train_path} and {valid_path}...")
         df = pd.read_csv(train_path)
@@ -102,15 +108,15 @@ class ModelNNTrainer():
         self.show_correlation_matrix(df)
         self.show_correlation_matrix(df_valid, True)
 
-        log(f"Training model {name} with threshold {threshold}...")
-        #nn = MyNeuralNetwork()
         model_nn = self.build_nn_architecture(X_train_scaled.shape[1], self.layers, log_function)
+        log(f"Training model {name} with threshold {threshold}...")
         history = model_nn.fit(
             X_train_scaled, y_train, 
-            epochs=50, 
-            batch_size=32, 
+            epochs=epochs, 
+            batch_size=batch_size, 
             validation_data=(X_valid_scaled, y_valid),
-            verbose=1
+            callbacks=[gui_log_callback, early_stop_callback],
+            verbose=0
         )
 
         y_pred = (model_nn.predict(X_valid_scaled) > threshold).astype(int)
@@ -125,34 +131,37 @@ class ModelNNTrainer():
         
         return history
     
+    
     def build_nn_architecture(self, input_shape, layers, log_function):
         model = Sequential()
         index = 1
         output_layer = [l for l in layers if l["output"]]
         only_hidden = [l for l in layers if not l["output"]]
         sorted_hidden = sorted(only_hidden, key=lambda x: x["id"])
+
+        def get_val(obj):
+            return obj.get() if hasattr(obj, 'get') else obj
+        
         for layer in sorted_hidden:
-            log_function("end", f"Building layer with {layer['neurons']} neurons")
+            layer_neurons = get_val(layer['neurons'])
+            layer_activation = get_val(layer['activation'])
+            log_function("end", f"Building layer with {layer_neurons} neurons and {layer_activation} activation function\n")
             if layer["id"] != index:
                 log_function("end", f"Error: There has been an unordered layer configuration. Please check the layers order and try again.")
                 return None
             
             if layer["id"] == 1:
-                model.add(Dense(int(layer['neurons']), activation=layer['activation'], input_shape=(input_shape,)))
+                model.add(Dense(int(layer_neurons), activation=layer_activation, input_shape=(input_shape,)))
+                index += 1
             else:
-                model.add(Dense(int(layer['neurons']), activation=layer['activation']))
+                model.add(Dense(int(layer_neurons), activation=layer_activation))
+                index += 1
 
-        model.add(Dense(1, activation=output_layer[0]['activation']))
+        out_act = get_val(output_layer[0]['activation'])
+    
+        log_function("end", f"Adding Output layer (1 neuron, {out_act})\n")
+        model.add(Dense(1, activation=out_act))
+        
         model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         return model
 
-
-class MyNeuralNetwork():
-    def build_model(self, inp_shape):
-        model = Sequential()
-        model.add(Dense(16, activation='relu', input_shape=(inp_shape,)))
-        model.add(Dense(8, activation='relu'))
-        model.add(Dense(1, activation='sigmoid'))
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-        return model

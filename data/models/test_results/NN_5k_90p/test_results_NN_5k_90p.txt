@@ -1,0 +1,15 @@
+### TEST RESULTS SUMMARY ###
+############################
+Model Name: NN_5k_90p
+Accuracy:   0.9760 (97.6%)
+
+CLASSIFICATION REPORT:
+----------------------
+              precision    recall  f1-score   support
+
+           0       0.97      0.99      0.98       439
+           1       0.99      0.95      0.97       311
+
+    accuracy                           0.98       750
+   macro avg       0.98      0.97      0.98       750
+weighted avg       0.98      0.98      0.98       750

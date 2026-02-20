@@ -1,0 +1,15 @@
+### TEST RESULTS SUMMARY ###
+############################
+Model Name: ML_3k_relV_50p
+Accuracy:   0.9489 (94.89%)
+
+CLASSIFICATION REPORT:
+----------------------
+              precision    recall  f1-score   support
+
+           0       0.94      0.97      0.96       271
+           1       0.96      0.91      0.93       179
+
+    accuracy                           0.95       450
+   macro avg       0.95      0.94      0.95       450
+weighted avg       0.95      0.95      0.95       450
